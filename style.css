@@ -1,0 +1,278 @@
+:root{
+  --bg:#071017;
+  --panel:#0b1216;
+  --accent:#ff6b6b;
+  --accent2:#ffb86b;
+  --muted:#9fb0ad;
+  --glass: rgba(255,255,255,0.028);
+  --glass-2: rgba(255,255,255,0.018);
+  --card-glow: 0 18px 50px rgba(255,107,107,0.08);
+  --soft-shadow: 0 8px 30px rgba(3,8,15,0.6);
+}
+/* base */
+*{box-sizing:border-box;font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
+html,body{height:100%;margin:0;background:
+  radial-gradient(900px 600px at 10% 10%, rgba(255,120,100,0.03), transparent),
+  linear-gradient(180deg,#071017 0%, #08121a 60%),
+  var(--bg);
+  color:#fff;overflow:hidden}
+
+/* New simple centered layout with game feel */
+.center{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:28px 18px;transition:all 260ms ease;gap:12px}
+#title{margin:12px 0 6px;font-size:34px;font-family:Orbitron, Inter, sans-serif;letter-spacing:1px;color:var(--accent);text-shadow:0 8px 36px rgba(255,107,107,0.06)}
+#playerCount{color:var(--muted);font-size:14px;margin-bottom:auto;display:block}
+
+/* players panel */
+.panel{width:100%;max-width:640px;background:linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.007));border-radius:18px;padding:18px;margin-top:12px;color:var(--muted);text-align:center;backdrop-filter: blur(10px);box-shadow: var(--soft-shadow)}
+#list{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:12px;align-items:stretch}
+.playerItem{width:100%;display:flex;align-items:center;gap:14px;padding:12px 14px;background:linear-gradient(180deg, rgba(255,255,255,0.018), rgba(255,255,255,0.008));border-radius:14px;transition:transform 260ms cubic-bezier(.2,.9,.3,1), box-shadow 260ms ease, background 220ms ease}
+.playerItem:hover{transform:translateY(-6px) scale(1.01);box-shadow:0 22px 60px rgba(3,8,15,0.65)}
+.avatar{width:56px;height:56px;border-radius:14px;
+  background: linear-gradient(180deg, rgba(255,107,107,0.98), rgba(255,86,86,0.95));
+  display:flex;align-items:center;justify-content:center;font-weight:900;color:#071022;box-shadow:0 10px 34px rgba(255,107,107,0.06);font-size:18px;transition:transform 320ms cubic-bezier(.2,.9,.3,1)}
+.info{flex:1;text-align:left}
+.name{display:inline-block;color:#fff;font-weight:800;letter-spacing:0.2px}
+.actions{display:flex;gap:8px}
+/* make buttons look softer and modern */
+.btn.small{padding:8px 10px;font-size:13px;border-radius:10px;transition:transform 160ms ease; background: transparent; border:1px solid rgba(255,255,255,0.03); color:var(--muted)}
+.edit{background:transparent;border:1px solid rgba(255,255,255,0.03);color:var(--muted)}
+.remove{background:transparent;border:1px solid rgba(255,255,255,0.04);color:#ff9b9b}
+
+/* animated entrance for player items */
+@keyframes fadeUp { 0%{opacity:0; transform:translateY(8px) scale(0.995)} 100%{opacity:1; transform:translateY(0) scale(1)} }
+.fadeInUp{animation:fadeUp 360ms cubic-bezier(.2,.9,.3,1) forwards}
+
+/* pulse when score changes */
+@keyframes scorePop { 0%{transform:scale(1)}30%{transform:scale(1.12)}100%{transform:scale(1)} }
+.scorePulse{animation:scorePop 560ms cubic-bezier(.2,.9,.3,1)}
+
+/* add row */
+.addRow{display:flex;gap:10px;margin-top:12px;align-items:center;justify-content:center}
+.addRow input[type="text"]{flex:1;padding:12px 14px;border-radius:12px;border:0;background:var(--glass-2);color:#fff;outline:none;box-shadow:inset 0 1px 0 rgba(255,255,255,0.02);transition:box-shadow 180ms ease, transform 160ms ease}
+.addRow button{transition:transform 160ms ease, box-shadow 160ms ease}
+.addRow input:focus{box-shadow:0 12px 36px rgba(255,107,107,0.06);transform:translateY(-2px)}
+.addRow input::placeholder{color:rgba(255,255,255,0.36)}
+.hints{margin-top:10px;color:var(--muted);font-size:13px}
+
+/* inline edit input */
+.editInput{width:100%;padding:10px 12px;border-radius:10px;border:0;background:#071022;color:#fff;outline:2px solid rgba(255,255,255,0.03);box-shadow:0 10px 30px rgba(0,0,0,0.4)}
+
+/* bottom controls */
+.bottomControls{width:100%;max-width:640px;display:flex;gap:12px;justify-content:space-between}
+.btn{flex:1;padding:14px 16px;border-radius:14px;border:0;background: rgba(255,255,255,0.016);color:#fff;font-size:16px;cursor:pointer;transition:transform 160ms cubic-bezier(.2,.9,.3,1), box-shadow 160ms ease}
+.btn:active{transform:translateY(2px)}
+.btn.primary{
+  background: linear-gradient(180deg, var(--accent), rgba(255,90,90,0.95));
+  font-weight:800;letter-spacing:0.6px;box-shadow: var(--card-glow);transform-origin:center}
+
+/* countdown overlay */
+#countdown{position:fixed;left:0;top:0;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;z-index:9998;background:linear-gradient(180deg, rgba(7,12,20,0.92), rgba(7,12,20,0.98))}
+.countInner{font-family:Orbitron, Inter, sans-serif;color:var(--accent);font-size:110px;font-weight:900;line-height:1;text-shadow:0 18px 56px rgba(0,0,0,0.6);transform:scale(0.9);opacity:0}
+.countInner.pop{animation:countPop 700ms cubic-bezier(.2,.9,.3,1) forwards}
+@keyframes countPop{
+  0%{transform:scale(0.6);opacity:0}
+  50%{transform:scale(1.12);opacity:1}
+  100%{transform:scale(1);opacity:1}
+}
+
+/* reveal overlay tweaks */
+#revealOverlay{backdrop-filter: blur(10px)}
+#revealOverlay .card { border-radius:16px; transition:transform 320ms cubic-bezier(.2,.9,.3,1), box-shadow 320ms ease; transform-origin:center; padding:22px; background: linear-gradient(180deg, rgba(12,18,24,0.98), rgba(8,12,16,0.98)); box-shadow: 0 34px 90px rgba(2,8,12,0.8) }
+
+/* large question & role styling */
+#revealOverlay .card .answerInput{transition:box-shadow 160ms ease, transform 160ms ease}
+#revealOverlay .card .answerInput:focus{box-shadow:0 18px 50px rgba(255,107,107,0.06);transform:translateY(-2px)}
+
+/* HUD and other unchanged sections kept but refined */
+#game{display:block;width:100vw;height:100vh}
+/* HUD */
+#ui{position:absolute;left:12px;top:12px;right:12px;pointer-events:none}
+#hud{display:flex;gap:8px;align-items:center;pointer-events:auto}
+#timer{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:8px 12px;border-radius:10px;color:var(--accent);font-weight:800;box-shadow:0 8px 30px rgba(0,0,0,0.4)}
+#status{background:rgba(255,255,255,0.02);padding:8px 12px;border-radius:10px;color:var(--muted)}
+#restart{margin-left:auto;padding:8px 12px;border-radius:10px;border:0;background: linear-gradient(180deg, var(--accent2), rgba(255,184,107,0.95));color:#071022;pointer-events:auto;box-shadow: 0 10px 36px rgba(255,184,107,0.06)}
+#votePanel{position: absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:var(--panel);padding:14px;border-radius:12px;width:80vw;max-width:460px;pointer-events:auto}
+#votePanel.hidden{display:none}
+#voteTitle{font-weight:700;margin-bottom:8px}
+#voteList{display:flex;flex-wrap:wrap;gap:8px;max-height:300px;overflow:auto;margin-bottom:8px}
+.voteItem{background:rgba(255,255,255,0.02);padding:10px 12px;border-radius:12px;flex:1 1 45%;text-align:center;cursor:pointer;transition:transform 160ms ease}
+.voteItem:hover{transform:translateY(-4px)}
+.voteItem.selected{outline:3px solid rgba(255,107,107,0.16);box-shadow:0 12px 40px rgba(255,107,107,0.04)}
+#finishVote{background: linear-gradient(180deg, var(--accent), rgba(255,80,80,0.95));border:0;padding:10px 12px;border-radius:12px;color:#071022;width:100%}
+
+/* Mobile controls */
+#mobileControls{position: absolute;left:8px;bottom:12px;right:8px;display:flex;justify-content:space-between;align-items:center;pointer-events:none}
+#stick{width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,0.02);pointer-events:auto;touch-action:none;box-shadow:0 12px 40px rgba(0,0,0,0.45)}
+.controlBtn{width:84px;height:48px;border-radius:12px;background:linear-gradient(180deg,var(--accent),rgba(255,80,80,0.95));display:flex;align-items:center;justify-content:center;pointer-events:auto;color:#071022}
+@media(min-width:900px){
+  #mobileControls{display:none}
+}
+
+/* make player list scrollable on small viewports so controls stay visible */
+@media(max-height:800px){
+  .panel{
+    max-height: calc(56vh);
+    display:flex;
+    flex-direction:column;
+    padding:12px;
+  }
+  #list{
+    overflow:auto;
+    padding-right:6px;
+    margin-bottom:8px;
+  }
+  /* ensure addRow and hints stick to bottom of panel */
+  .addRow{flex:0 0 auto}
+  .hints{flex:0 0 auto}
+}
+
+/* Custom styled scrollbar for player list - matches site look */
+#list{
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.12) transparent;
+}
+
+/* Webkit browsers */
+#list::-webkit-scrollbar{ width:10px; height:10px }
+#list::-webkit-scrollbar-track{
+  background: transparent;
+  margin:8px 0;
+  border-radius:12px;
+}
+#list::-webkit-scrollbar-thumb{
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+  border-radius:12px;
+  border:2px solid transparent;
+  background-clip: padding-box;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), 0 6px 18px rgba(0,0,0,0.45);
+  transition: background 180ms ease, transform 160ms ease;
+}
+#list::-webkit-scrollbar-thumb:hover{
+  background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
+  transform: translateX(-1px);
+}
+
+/* ensure consistent padding so content isn't hidden under custom thumb */
+.playerItem{width:calc(100% - 6px)}
+
+/* Settings button top-right */
+#settingsBtn{
+  position: absolute;
+  right: 18px;
+  top: 14px;
+  z-index: 60;
+  padding:10px 12px;
+  border-radius:12px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.012), rgba(255,255,255,0.006));
+  color:#fff;
+  pointer-events:auto;
+  box-shadow: 0 18px 50px rgba(0,0,0,0.45);
+  display:flex;
+  gap:8px;
+  align-items:center;
+  transform-origin:center;
+  transition:transform 180ms cubic-bezier(.2,.9,.3,1), box-shadow 180ms ease, background 200ms ease;
+  border:1px solid rgba(255,255,255,0.02);
+}
+#settingsBtn:hover{transform:translateY(-4px) scale(1.02); box-shadow:0 26px 70px rgba(0,0,0,0.55)}
+#settingsBtn:active{transform:translateY(0) scale(.99)}
+#settingsBtn .icon{opacity:0.95; color:var(--accent); transition:transform 180ms ease}
+#settingsBtn .label{font-weight:700; font-size:13px; color:#fff}
+
+/* Settings panel - improved visual, header and fields */
+#settingsPanel{
+  position: absolute;
+  right: 18px;
+  top: 64px;
+  width: min(340px, 92vw);
+  z-index: 59;
+  padding:14px;
+  border-radius:14px;
+  background: linear-gradient(180deg, rgba(8,12,14,0.96), rgba(10,14,18,0.98));
+  box-shadow: 0 26px 80px rgba(2,8,12,0.7);
+  color:var(--muted);
+  overflow:hidden;
+  transform-origin:top right;
+  transition:transform 220ms cubic-bezier(.2,.9,.3,1), opacity 180ms ease;
+}
+
+/* header inside settings */
+.settingsHeader{display:flex;align-items:center;justify-content:space-between;padding:8px 4px;border-bottom:1px solid rgba(255,255,255,0.02);margin-bottom:10px}
+.settingsTitle{font-weight:800;color:#fff;font-size:15px}
+.settingsActions{display:flex;gap:8px}
+
+/* body */
+.settingsBody{display:flex;flex-direction:column;gap:10px;padding:6px}
+.fieldLabel{font-weight:700;color:#fff;font-size:13px;margin-bottom:4px;text-align:left}
+.fieldRow{display:flex;align-items:center;gap:10px}
+.fieldHelp{font-size:12px;color:var(--muted);flex:1;text-align:left}
+
+/* numeric input styling */
+.numInput{width:92px;padding:10px;border-radius:10px;border:0;background:rgba(255,255,255,0.02);color:#fff;font-weight:700;outline:none;box-shadow:inset 0 1px 0 rgba(255,255,255,0.02);transition:box-shadow 160ms ease}
+.numInput:focus{box-shadow:0 12px 36px rgba(255,107,107,0.06)}
+
+/* muted note */
+.mutedNote{font-size:12px;color:var(--muted);margin-top:6px}
+
+/* New impostor selector visuals */
+.impostorSelector{
+  align-items:center;
+  gap:12px;
+  display:flex;
+  justify-content:space-between;
+  width:100%;
+  max-width:260px;
+  margin-top:4px;
+}
+
+/* circular icon buttons for +/- */
+.impBtn{
+  width:44px;
+  height:44px;
+  border-radius:12px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  background:linear-gradient(180deg, rgba(255,255,255,0.018), rgba(255,255,255,0.008));
+  border:1px solid rgba(255,255,255,0.03);
+  color:var(--muted);
+  font-size:20px;
+  line-height:1;
+  cursor:pointer;
+  transition:transform 160ms ease, background 160ms ease, color 160ms ease;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.impBtn:active{transform:translateY(2px)}
+.impBtn:hover{color:#fff;border-color:rgba(255,255,255,0.06);background:linear-gradient(180deg, rgba(255,107,107,0.06), rgba(255,107,107,0.02))}
+
+/* central pill showing current value with subtle glow */
+.numDisplay{
+  min-width:86px;
+  height:52px;
+  border-radius:14px;
+  background:linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:900;
+  color:var(--accent);
+  font-size:20px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), 0 8px 30px rgba(255,107,107,0.04);
+  border:1px solid rgba(255,255,255,0.02);
+}
+
+/* small helper note inline */
+#impostorMaxNote{
+  font-size:12px;
+  color:var(--muted);
+  margin-left:8px;
+}
+
+/* ensure hidden numeric input stays non-disruptive */
+.numInput.hidden{display:none !important}
+
+/* keep .btn.ghost present but make it smaller where used elsewhere */
+.btn.ghost{padding:6px 8px;font-size:13px;border-radius:10px;}
+
+/* Hidden helper */
+.hidden{display:none}

@@ -1,0 +1,824 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>El Impostor</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Inter:wght@300;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="center">
+    <h1 id="title">El Impostor</h1>
+
+    <!-- Settings button (top-right) -->
+    <button id="settingsBtn" class="btn small" aria-expanded="false" title="Ajustes" aria-label="Ajustes">
+      <!-- simplified accessible emoji button -->
+      <span class="emoji" aria-hidden="true">⚙️</span>
+    </button>
+
+    <div id="playerCount">Jugadores: <span id="count">0</span></div>
+
+    <!-- Settings panel (hidden by default) -->
+    <div id="settingsPanel" class="panel hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <div class="settingsHeader">
+        <div id="settingsTitle" class="settingsTitle">Ajustes</div>
+        <div class="settingsActions">
+          <button id="closeSettings" class="btn small ghost" title="Cerrar">Cerrar</button>
+        </div>
+      </div>
+      <div class="settingsBody">
+        <!-- Only option: number of impostors -->
+        <label class="fieldLabel" for="impostorCount">Número de impostores</label>
+        <div class="fieldRow impostorSelector" aria-hidden="false">
+          <button id="impMinus" class="btn small ghost" aria-label="Menos impostores">−</button>
+          <div class="impValueWrap" style="display:flex;flex-direction:column;align-items:center;flex:1">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div id="impostorCountDisplay" class="numDisplay" aria-live="polite">1</div>
+              <div id="impostorMaxNote" class="mutedNote" style="font-size:12px;margin-left:6px;color:var(--muted)"> / max 1</div>
+            </div>
+            <div class="fieldHelp" style="margin-top:6px">Ajusta cuántos impostores habrá por ronda (mín 1).</div>
+          </div>
+          <button id="impPlus" class="btn small" aria-label="Más impostores">+</button>
+          <!-- hidden canonical input kept for legacy reads -->
+          <input id="impostorCount" type="number" min="1" value="1" class="numInput hidden" />
+        </div>
+        <label class="mutedNote">Nota: este ajuste se aplica al iniciar cada ronda.</label>
+      </div>
+    </div>
+
+    <!-- players list -->
+    <div id="playersList" class="panel">
+      <ul id="list">
+        <!-- initial players will be rendered by JS -->
+      </ul>
+
+      <!-- inline add / rename area -->
+      <div class="addRow">
+        <input id="nameInput" type="text" placeholder="Nombre del jugador" maxlength="24" />
+        <button id="addPlayer" class="btn small">Agregar</button>
+      </div>
+
+      <div class="hints">Toca un nombre para editarlo.</div>
+    </div>
+
+    <div class="bottomControls">
+      <button id="startGame" class="btn primary">Empezar juego</button>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      let countEl = document.getElementById('count')
+      let addBtn = document.getElementById('addPlayer')
+      let startBtn = document.getElementById('startGame')
+      let listEl = document.getElementById('list')
+      let nameInput = document.getElementById('nameInput')
+
+      // start with no players
+      const players = []
+
+      function renderList(){
+        listEl.innerHTML = ''
+        players.forEach((p, idx)=>{
+          // ensure score exists for older entries
+          if(typeof p.score !== 'number') p.score = 0
+          const li = document.createElement('li')
+          li.className = 'playerItem fadeInUp'         // added entrance animation
+          li.dataset.id = p.id
+
+          const avatar = document.createElement('div')
+          avatar.className = 'avatar'
+          avatar.textContent = p.name.charAt(0).toUpperCase()
+
+          const info = document.createElement('div')
+          info.className = 'info'
+
+          const nameSpan = document.createElement('span')
+          nameSpan.className = 'name'
+          nameSpan.textContent = p.name + (p.isYou ? ' (Tú)' : '') + (typeof p.score === 'number' ? ` — ${p.score} pts` : '')
+          nameSpan.title = 'Toca para editar'
+          nameSpan.addEventListener('click', ()=> beginEdit(p.id))
+
+          // pulse avatar briefly when score changes (simple lively feedback)
+          const prevScore = p._lastScore
+          p._lastScore = p.score
+          if(prevScore !== undefined && prevScore !== p.score){
+            avatar.classList.add('scorePulse')
+            setTimeout(()=> avatar.classList.remove('scorePulse'), 700)
+          }
+
+          const editBtn = document.createElement('button')
+          editBtn.className = 'edit small'
+          editBtn.textContent = 'Editar'
+          editBtn.addEventListener('click', ()=> beginEdit(p.id))
+
+          const removeBtn = document.createElement('button')
+          removeBtn.className = 'remove small'
+          removeBtn.textContent = 'Eliminar'
+          removeBtn.addEventListener('click', ()=> {
+            // allow deleting players down to 0
+            const i = players.findIndex(x=>x.id===p.id)
+            if(i>=0) players.splice(i,1)
+            renderList()
+          })
+
+          info.appendChild(nameSpan)
+          const actions = document.createElement('div')
+          actions.className = 'actions'
+          actions.appendChild(editBtn)
+          actions.appendChild(removeBtn)
+
+          li.appendChild(avatar)
+          li.appendChild(info)
+          li.appendChild(actions)
+          listEl.appendChild(li)
+
+          // subtle stagger for animation
+          li.style.animationDelay = (idx * 40) + 'ms'
+        })
+        countEl.textContent = players.length
+        // update impostor selector maximum based on players count (max players-1)
+        const rawMax = Math.max(1, players.length - 1)
+        const maxNote = document.getElementById('impostorMaxNote')
+        const display = document.getElementById('impostorCountDisplay')
+        const hidden = document.getElementById('impostorCount')
+        if(maxNote) maxNote.textContent = ` / max ${rawMax}`
+        if(hidden){
+          hidden.max = rawMax
+          // clamp current value if needed
+          let cur = parseInt(hidden.value,10) || 1
+          cur = Math.max(1, Math.min(cur, rawMax))
+          hidden.value = cur
+          if(display) display.textContent = cur
+        }
+      }
+
+      function beginEdit(id){
+        const p = players.find(x=>x.id===id)
+        if(!p) return
+        // replace input inline
+        const li = listEl.querySelector(`li[data-id="${id}"]`)
+        const info = li.querySelector('.info')
+        info.innerHTML = ''
+        const input = document.createElement('input')
+        input.type = 'text'
+        input.className = 'editInput'
+        input.value = p.name
+        input.maxLength = 24
+        input.addEventListener('keydown', (e)=>{
+          if(e.key === 'Enter'){ finishEdit(id, input.value) }
+          if(e.key === 'Escape'){ renderList() }
+        })
+        input.addEventListener('blur', ()=> finishEdit(id, input.value))
+        info.appendChild(input)
+        input.focus()
+        input.select()
+      }
+
+      function finishEdit(id, newName){
+        newName = (newName || '').trim()
+        if(!newName) newName = 'Jugador'
+        const p = players.find(x=>x.id===id)
+        if(p){ p.name = newName }
+        renderList()
+      }
+
+      addBtn.addEventListener('click', ()=>{
+        // no maximum limit
+        const name = (nameInput.value || '').trim()
+        if(!name) return nameInput.focus()
+        const id = 'p' + players.length
+        players.push({id, name, isYou:false, score:0})
+        nameInput.value = ''
+        renderList()
+      })
+
+      nameInput.addEventListener('keydown', (e)=>{
+        if(e.key === 'Enter') addBtn.click()
+      })
+
+      function showCountdown(){ // returns a promise resolved after countdown
+        return new Promise(resolve=>{
+          const cd = document.createElement('div')
+          cd.id = 'countdown'
+          cd.innerHTML = '<div class="countInner">3</div>'
+          document.body.appendChild(cd)
+          let nums = ['3','2','1']
+          let i=0
+          const inner = cd.querySelector('.countInner')
+          inner.classList.add('pop')
+          function step(){
+            inner.classList.remove('pop')
+            void inner.offsetWidth
+            inner.textContent = nums[i]
+            inner.classList.add('pop')
+            i++
+            if(i<nums.length){
+              setTimeout(step, 850)
+            } else {
+              setTimeout(()=>{ document.body.removeChild(cd); resolve() }, 700)
+            }
+          }
+          step()
+        })
+      }
+
+      startBtn.addEventListener('click', async ()=>{
+        // require minimum 3 players to start the game
+        if(players.length < 3){
+          alert('Agrega al menos 3 jugadores.')
+          return
+        }
+        // show 3-2-1 countdown with animation
+        await showCountdown()
+
+        // lock UI while revealing roles
+        document.getElementById('nameInput').disabled = true
+        addBtn.disabled = true
+        startBtn.disabled = true
+
+        // choose random impostors based on settings
+        players.forEach(p=>delete p.isImpostor)
+        // read impostor count from settings (clamp between 1 and players.length-1)
+        const raw = parseInt(document.getElementById('impostorCount').value,10) || 1
+        const impCount = Math.max(1, Math.min(raw, Math.max(1, players.length - 1)))
+        // shuffle indices and pick first impCount
+        const indices = players.map((_,i)=>i)
+        for(let i=indices.length-1;i>0;i--){
+          const j = Math.floor(Math.random()*(i+1))
+          const t = indices[i]; indices[i]=indices[j]; indices[j]=t
+        }
+        for(let k=0;k<impCount;k++){
+          players[indices[k]].isImpostor = true
+        }
+
+        // QUESTIONS POOL: each item has text and impostor range (impMin..impMax)
+        const questions = [
+          {q:'¿Cuántas veces te has masturbado en un día? (Récord personal)', impMin:1, impMax:7},
+          {q:'¿Cuántas parejas sexuales has tenido en tu vida?', impMin:3, impMax:25},
+          {q:'¿Cuántos segundos/minutos sueles aguantar en la cama (o hasta el orgasmo)?', impMin:2, impMax:15},
+          {q:'¿Cuántas veces has tenido sexo en un solo día? (Récord personal)', impMin:2, impMax:8},
+          {q:'¿Cuántas veces has fingido un orgasmo?', impMin:1, impMax:20},
+          {q:'Con cuántas personas de este grupo te acostarías?', impMin:0, impMax:5},
+          {q:'¿Cuántos orgasmos has tenido en una sola sesión de sexo?', impMin:1, impMax:6},
+          {q:'¿Cuántas veces has hecho el "delicioso" en un sitio público o arriesgado?', impMin:0, impMax:7},
+          {q:'¿Cuántas veces te han pillado masturbándote?', impMin:0, impMax:4},
+          {q:'¿Cuántas veces has tenido sexo con un ex después de romper?', impMin:1, impMax:10},
+          {q:'¿Cuántas veces has enviado un nude y te arrepentiste al instante?', impMin:0, impMax:5},
+          {q:'¿Cuántos "matches" de Tinder tienes actualmente sin contestar?', impMin:3, impMax:30},
+          {q:'¿Cuántas veces has fantaseado con un compañero de trabajo o de clase?', impMin:1, impMax:15},
+          {q:'¿Cuántas personas te han visto desnudo/a sin que fuera en un contexto sexual?', impMin:1, impMax:10},
+          {q:'¿Cuántas veces has tenido un "amigo con derechos"?', impMin:1, impMax:8},
+          {q:'¿Cuántas veces has hecho una llamada o videollamada "picante"?', impMin:1, impMax:10},
+          {q:'¿Cuántas veces has salido con alguien solo para tener sexo?', impMin:1, impMax:10},
+          {q:'¿Cuántas veces has tenido sexo bajo los efectos del alcohol o algo más?', impMin:3, impMax:20},
+          {q:'¿Cuántas veces has tenido un "polvo rápido" a escondidas (en casa de tus padres, oficina, etc.)?', impMin:0, impMax:10},
+          {q:'¿Cuántas veces has llorado después de tener sexo?', impMin:0, impMax:5},
+          {q:'¿Cuántas veces has rechazado a alguien por mensaje para evitar una confrontación?', impMin:2, impMax:15},
+          {q:'¿Cuántas veces has stalkeado a la ex-pareja de tu actual pareja?', impMin:1, impMax:10},
+          {q:'¿Cuántas veces has dicho "te quiero" sin sentirlo de verdad?', impMin:1, impMax:10},
+          {q:'¿Cuántas veces has fantaseado con tener un trío?', impMin:1, impMax:20},
+          {q:'¿Cuántas veces has tenido sexo con alguien en la primera cita?', impMin:1, impMax:10},
+          {q:'¿Cuántas veces has mentido sobre tu número de parejas sexuales?', impMin:1, impMax:5},
+          {q:'¿Cuántas veces has tenido un sueño erótico con un conocido?', impMin:1, impMax:8},
+          {q:'¿Cuántas veces has usado juguetes sexuales?', impMin:1, impMax:15},
+          {q:'¿Cuántas veces te has besado con un desconocido en una noche de fiesta?', impMin:0, impMax:10},
+          {q:'¿Cuántas veces has mirado el teléfono de tu pareja a escondidas?', impMin:1, impMax:15},
+          {q:'¿Cuántas veces has salido con dos (o más) personas a la vez sin que lo supieran?', impMin:0, impMax:5},
+          {q:'¿Cuántas veces has rechazado sexo a tu pareja por puro aburrimiento o pereza?', impMin:3, impMax:20},
+          {q:'¿Cuántas fotos o videos "íntimos" tienes guardados en tu teléfono?', impMin:5, impMax:50},
+          {q:'¿Cuántas veces has tenido sexo sin protección con alguien que no era tu pareja estable?', impMin:0, impMax:8},
+          {q:'¿Cuántas veces has tenido un "casi algo" que no llegó a nada?', impMin:3, impMax:15},
+          {q:'¿Cuántas veces has ghosteado a alguien (dejado de hablar de repente)?', impMin:1, impMax:10},
+          {q:'¿Cuántas veces te han ghosteado a ti?', impMin:2, impMax:12},
+          {q:'¿Cuántas veces has salido con alguien que sabías que no era buena idea?', impMin:2, impMax:10},
+          {q:'¿Cuántas veces has intentado ligar con el/la mejor amigo/a de un ex?', impMin:0, impMax:5},
+          {q:'¿Cuántas veces has tenido celos de la relación de alguien en redes sociales?', impMin:3, impMax:15},
+          {q:'¿Cuántas veces has stalkeado a tu ex en redes sociales este mes?', impMin:1, impMax:15},
+          {q:'¿Cuántas veces has mentido sobre tu edad o tu nombre para ligar?', impMin:0, impMax:5},
+          {q:'¿Cuántas veces has tenido sexo en la casa de tus padres?', impMin:0, impMax:10},
+          {q:'¿Cuántas veces has tenido una aventura de una sola noche?', impMin:1, impMax:8},
+          {q:'¿Cuántas veces has fantaseado con un famoso o una persona inalcanzable?', impMin:5, impMax:25},
+          {q:'¿Cuántas veces has intentado (y fracasado) en hacer una postura sexual complicada?', impMin:1, impMax:8},
+          {q:'¿Cuántas veces has tenido que parar en medio del sexo por un ruido, un calambre o algo raro?', impMin:2, impMax:10},
+          {q:'¿Cuántas veces has mentido sobre haber tenido un orgasmo con tu pareja actual?', impMin:1, impMax:15},
+          {q:'¿Cuántas veces has rechazado a alguien que te gustaba por miedo al qué dirán?', impMin:1, impMax:6},
+          {q:'¿Cuántas veces te has arrepentido de no haber hecho un avance sexual con alguien?', impMin:2, impMax:10}
+         ]
+
+         // assign a shared random question for the round (all non‑impostors see the same)
+         const roundQuestion = questions[Math.floor(Math.random()*questions.length)]
+
+         // create overlay for sequential secret reveals
+         let overlay = document.createElement('div')
+         overlay.id = 'revealOverlay'
+         overlay.style.position = 'fixed'
+         overlay.style.left = '0'
+         overlay.style.top = '0'
+         overlay.style.width = '100vw'
+         overlay.style.height = '100vh'
+         overlay.style.display = 'flex'
+         overlay.style.alignItems = 'center'
+         overlay.style.justifyContent = 'center'
+         overlay.style.background = '#071022'
+         overlay.style.zIndex = '9999'
+         overlay.style.color = '#fff'
+         overlay.style.fontFamily = 'Orbitron, Inter, system-ui, -apple-system, "Segoe UI", Roboto'
+         document.body.appendChild(overlay)
+
+         const card = document.createElement('div')
+         card.className = 'card'
+         card.style.width = '86vw'
+         card.style.maxWidth = '420px'
+         card.style.padding = '22px'
+         card.style.borderRadius = '14px'
+         card.style.background = 'linear-gradient(180deg, #0b1220, #071022)' // made opaque/darker
+         card.style.textAlign = 'center'
+         card.style.boxShadow = '0 18px 50px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.02)'
+         overlay.appendChild(card)
+
+         const title = document.createElement('div')
+         title.style.fontSize = '20px'
+         title.style.fontWeight = '700'
+         title.style.marginBottom = '8px'
+         title.textContent = 'Revelación de roles'
+         card.appendChild(title)
+
+         const hint = document.createElement('div')
+         hint.style.color = 'rgba(255,255,255,0.7)'
+         hint.style.marginBottom = '14px'
+         hint.style.fontSize = '14px'
+         hint.textContent = 'Pasa el móvil al jugador indicado, toca OK y mira tu rol en secreto.'
+         card.appendChild(hint)
+
+         const nameBox = document.createElement('div')
+         nameBox.style.fontSize = '18px'
+         nameBox.style.fontWeight = '700'
+         nameBox.style.padding = '18px'
+         nameBox.style.borderRadius = '10px'
+         nameBox.style.background = 'rgba(255,255,255,0.02)'
+         nameBox.style.marginBottom = '14px'
+         nameBox.style.minHeight = '48px'
+         nameBox.style.display = 'flex'
+         nameBox.style.alignItems = 'center'
+         nameBox.style.justifyContent = 'center'
+         card.appendChild(nameBox)
+
+         // BIG question box placed outside the answer area to be large and very visible
+         const questionBox = document.createElement('div')
+         questionBox.style.fontSize = '24px'
+         questionBox.style.fontWeight = '800'
+         questionBox.style.padding = '16px'
+         questionBox.style.borderRadius = '12px'
+         questionBox.style.marginBottom = '12px'
+         questionBox.style.minHeight = '56px'
+         questionBox.style.display = 'none'
+         questionBox.style.alignItems = 'center'
+         questionBox.style.justifyContent = 'center'
+         questionBox.style.background = 'rgba(255,255,255,0.02)'
+         questionBox.style.color = '#fff'
+         card.appendChild(questionBox)
+
+         const roleBox = document.createElement('div')
+         roleBox.style.fontSize = '28px'
+         roleBox.style.fontWeight = '800'
+         roleBox.style.padding = '18px'
+         roleBox.style.borderRadius = '10px'
+         roleBox.style.marginBottom = '14px'
+         roleBox.style.minHeight = '56px'
+         roleBox.style.display = 'none'
+         roleBox.style.alignItems = 'center'
+         roleBox.style.justifyContent = 'center'
+         card.appendChild(roleBox)
+
+         const btnRow = document.createElement('div')
+         btnRow.style.display = 'flex'
+         btnRow.style.gap = '10px'
+         btnRow.style.justifyContent = 'center'
+         card.appendChild(btnRow)
+
+         const okBtn = document.createElement('button')
+         okBtn.textContent = 'OK'
+         okBtn.style.flex = '1'
+         okBtn.style.padding = '12px'
+         okBtn.style.borderRadius = '10px'
+         okBtn.style.border = '0'
+         okBtn.style.background = 'var(--accent)'
+         okBtn.style.color = '#fff'
+         okBtn.style.fontWeight = '700'
+         okBtn.style.cursor = 'pointer'
+
+         const nextBtn = document.createElement('button')
+         nextBtn.textContent = 'Siguiente'
+         nextBtn.style.flex = '1'
+         nextBtn.style.padding = '12px'
+         nextBtn.style.borderRadius = '10px'
+         nextBtn.style.border = '0'
+         nextBtn.style.background = 'rgba(255,255,255,0.03)'
+         nextBtn.style.color = '#fff'
+         nextBtn.style.fontWeight = '700'
+         nextBtn.style.display = 'none'
+         nextBtn.style.cursor = 'pointer'
+
+         btnRow.appendChild(okBtn)
+         btnRow.appendChild(nextBtn)
+
+         // collect answers
+         const answers = {}
+         let idx = 0
+         function showPrompt(i){
+           const p = players[i]
+           // use the shared round question; impostor will only see its numeric range
+           const assigned = roundQuestion
+           // always show the actual player's name here (reserve "Ciudadano" for final lists/votes)
+           nameBox.textContent = `Jugador: ${p.name}`
+           roleBox.style.display = 'none'
+           roleBox.textContent = ''
+           okBtn.style.display = 'inline-flex'
+           nextBtn.style.display = 'none'
+           // remove any previous input
+           const prevInput = card.querySelector('.answerInput')
+           if(prevInput) prevInput.remove()
+           // subtle pulse on nameBox
+           nameBox.animate([{transform:'scale(0.98)'},{transform:'scale(1)'}],{duration:500,fill:'forwards',easing:'ease-out'})
+           // create input asking question depending on role
+           const input = document.createElement('input')
+           input.className = 'answerInput'
+           input.type = 'number'
+           input.style.width = '100%'
+           input.style.margin = '8px 0'
+           input.style.padding = '12px'
+           input.style.borderRadius = '10px'
+           input.style.border = '0'
+           input.style.outline = 'none'
+           input.style.background = 'rgba(255,255,255,0.02)'
+           input.style.color = '#fff'
+           // Non‑impostors see the full question; impostor sees only the numeric range as hint
+           if(p.isImpostor){
+             questionBox.style.display = 'flex'
+             questionBox.textContent = `Rango para impostor: ${assigned.impMin}–${assigned.impMax}`
+             input.placeholder = `Introduce un número dentro del rango (${assigned.impMin}–${assigned.impMax})`
+             input.min = assigned.impMin
+             input.max = assigned.impMax
+           } else {
+             questionBox.style.display = 'flex'
+             questionBox.textContent = assigned.q
+             input.placeholder = 'Número...'
+             input.min = 0
+             input.max = 999
+           }
+           card.insertBefore(input, roleBox)
+           input.focus()
+           // okBtn will reveal their role (or accept impostor input when impostor)
+           okBtn.onclick = ()=>{
+             const val = (input.value || '').trim()
+             // require the player to enter something before proceeding
+             if(val === ''){
+               // subtle feedback: pulse the input and shake
+               input.animate([{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'translateX(0)'}],{duration:260})
+               input.focus()
+               return
+             }
+             // basic sanitise to number fallback
+             let num = parseInt(val,10)
+             if(isNaN(num) || num < 1) num = 1
+             if(num > 30) num = 30
+             answers[p.id] = num
+             // hide question once answered
+             questionBox.style.display = 'none'
+             // now show role info (impostor gets no question text, just different message)
+             showRole(i)
+           }
+         }
+
+         function showRole(i){
+           const p = players[i]
+           roleBox.style.display = 'flex'
+           if(p.isImpostor){
+             // impostor sees a short confirmation message (no real question)
+             roleBox.textContent = 'Número registrado. Eres el IMPOSTOR'
+             roleBox.style.background = 'linear-gradient(90deg, rgba(231,76,60,0.12), rgba(231,76,60,0.06))'
+             roleBox.style.color = '#ffdddd'
+           } else {
+             roleBox.textContent = 'Número registrado. No eres impostor'
+             roleBox.style.background = 'rgba(255,255,255,0.02)'
+             roleBox.style.color = '#fff'
+           }
+           okBtn.style.display = 'none'
+           nextBtn.style.display = 'inline-flex'
+           // small pop for role
+           roleBox.animate([{transform:'scale(0.9)',opacity:0},{transform:'scale(1)',opacity:1}],{duration:360,easing:'cubic-bezier(.2,.9,.3,1)'})
+         }
+
+         // New helper: show a pass-phone screen for next player index
+         function showPassTo(nextIndex){
+           // clear previous input area if present
+           const prevInput = card.querySelector('.answerInput')
+           if(prevInput) prevInput.remove()
+           // hide question box as well
+           questionBox.style.display = 'none'
+           // temporarily hide roleBox and buttons, show single continue button
+           roleBox.style.display = 'none'
+           okBtn.style.display = 'none'
+           nextBtn.style.display = 'none'
+           nameBox.textContent = `Pasa el móvil a ${players[nextIndex].name}`
+           const contBtn = document.createElement('button')
+           contBtn.textContent = 'Continuar'
+           contBtn.style.padding = '12px'
+           contBtn.style.border = '0'
+           contBtn.style.borderRadius = '10px'
+           contBtn.style.background = 'var(--accent)'
+           contBtn.style.color = '#fff'
+           contBtn.style.fontWeight = '700'
+           contBtn.style.marginTop = '12px'
+           // remove any existing temp button
+           const old = card.querySelector('.passContinue')
+           if(old) old.remove()
+           contBtn.className = 'passContinue'
+           card.appendChild(contBtn)
+           contBtn.addEventListener('click', ()=>{
+             contBtn.remove()
+             // small delay to avoid ghosting previous content, then show next prompt
+             setTimeout(()=> showPrompt(nextIndex), 120)
+           }, {once:true})
+         }
+
+         nextBtn.addEventListener('click', ()=>{
+           // clear input area if present
+           const prevInput = card.querySelector('.answerInput')
+           if(prevInput) prevInput.remove()
+           idx++
+           if(idx < players.length){
+             // show intermediate "pass the phone to next player" screen
+             showPassTo(idx)
+           } else {
+             // all answered, ask to put phone in middle and show a 3-2-1
+             nameBox.textContent = 'Pon el móvil en el centro. Revelando respuestas...'
+             roleBox.style.display = 'none'
+             okBtn.style.display = 'none'
+             nextBtn.style.display = 'none'
+             // small delay then countdown
+             setTimeout(()=> {
+               const seq = ['3','2','1']
+               let j = 0
+               const revealInner = document.createElement('div')
+               revealInner.className = 'countInner'
+               revealInner.style.fontSize = '64px'
+               revealInner.style.color = 'var(--accent)'
+               revealInner.style.margin = '10px 0'
+               card.appendChild(revealInner)
+               function step2(){
+                 revealInner.textContent = seq[j]
+                 revealInner.classList.add('pop')
+                 setTimeout(()=>{
+                   revealInner.classList.remove('pop')
+                   j++
+                   if(j < seq.length) step2()
+                   else {
+                     // remove countdown and show all answers
+                     revealInner.remove()
+                     showAllAnswersAndVote()
+                   }
+                 },700)
+               }
+               step2()
+             },700)
+           }
+         })
+
+         // start sequence
+         // first show "pass the phone" screen even for the first player
+         showPassTo(0)
+
+         // function to show all answers and run voting inside overlay
+         function showAllAnswersAndVote(){
+           // clear card content, build answers list + voting UI
+           card.innerHTML = ''
+           // show the round question so the impostor knows which question to defend
+           const qDisplay = document.createElement('div')
+           qDisplay.style.fontWeight = '700'
+           qDisplay.style.marginBottom = '10px'
+           qDisplay.style.fontSize = '15px'
+           qDisplay.style.color = '#fff'
+           qDisplay.textContent = `Pregunta: ${roundQuestion.q}`
+           card.appendChild(qDisplay)
+           const t = document.createElement('div')
+           t.style.fontWeight = '800'
+           t.style.marginBottom = '8px'
+           t.textContent = 'Respuestas registradas'
+           card.appendChild(t)
+           const listWrap = document.createElement('div')
+           listWrap.style.display = 'flex'
+           listWrap.style.flexDirection = 'column'
+           listWrap.style.gap = '8px'
+           listWrap.style.marginBottom = '12px'
+           players.forEach(p=>{
+             const row = document.createElement('div')
+             row.style.display = 'flex'
+             row.style.justifyContent = 'space-between'
+             row.style.padding = '8px'
+             row.style.borderRadius = '8px'
+             row.style.background = 'rgba(255,255,255,0.02)'
+             const left = document.createElement('div')
+             // show actual name for all players (do not replace with "Ciudadano")
+             left.textContent = p.name
+             const right = document.createElement('div')
+             right.textContent = (answers[p.id] !== undefined) ? answers[p.id] : '-'
+             row.appendChild(left)
+             row.appendChild(right)
+             listWrap.appendChild(row)
+           })
+           card.appendChild(listWrap)
+           // voting title
+           const voteTitle = document.createElement('div')
+           voteTitle.style.fontWeight = '700'
+           voteTitle.style.margin = '8px 0'
+           voteTitle.textContent = 'Votad quién creéis que es el impostor'
+           card.appendChild(voteTitle)
+           // build vote options
+           const voteOptions = document.createElement('div')
+           voteOptions.style.display = 'grid'
+           voteOptions.style.gridTemplateColumns = players.length > 6 ? '1fr' : '1fr 1fr'
+           voteOptions.style.gap = '8px'
+           voteOptions.style.marginBottom = '10px'
+           voteOptions.style.maxHeight = '40vh'         // limit height so it doesn't overflow the screen
+           voteOptions.style.overflowY = 'auto'         // make it scrollable when many players
+           voteOptions.style.paddingRight = '6px'       // space for scrollbar
+           let selectedVote = null
+           players.forEach(p=>{
+             const opt = document.createElement('button')
+             // show actual name for all players on vote buttons (do not use "Ciudadano")
+             opt.textContent = p.name
+             // compact button styling for many players
+             opt.style.padding = players.length > 10 ? '8px' : '10px'
+             opt.style.borderRadius = '8px'
+             opt.style.border = '0'
+             opt.style.background = 'rgba(255,255,255,0.03)'
+             opt.style.color = '#fff'
+             opt.style.cursor = 'pointer'
+             opt.style.textAlign = 'center'
+             opt.style.whiteSpace = 'nowrap'
+             opt.style.overflow = 'hidden'
+             opt.style.textOverflow = 'ellipsis'
+             opt.addEventListener('click', ()=> {
+               selectedVote = p.id
+               Array.from(voteOptions.children).forEach(c=> c.style.outline = 'none')
+               opt.style.outline = '2px solid var(--accent)'
+             })
+             voteOptions.appendChild(opt)
+           })
+           card.appendChild(voteOptions)
+           const voteBtn = document.createElement('button')
+           voteBtn.textContent = 'Realizar votación'
+           voteBtn.style.width = '100%'
+           voteBtn.style.padding = '12px'
+           voteBtn.style.border = '0'
+           voteBtn.style.borderRadius = '10px'
+           voteBtn.style.background = 'var(--accent)'
+           voteBtn.style.color = '#fff'
+           voteBtn.style.fontWeight = '700'
+           voteBtn.addEventListener('click', ()=>{
+             // determine outcome
+             const chosen = players.find(p=>p.id===selectedVote)
+             card.innerHTML = ''
+             const res = document.createElement('div')
+             res.style.fontWeight = '800'
+             res.style.fontSize = '18px'
+             res.style.marginBottom = '10px'
+             // award points and show result text
+             if(!chosen){
+               // no vote -> impostor wins
+               const imp = players.find(p=>p.isImpostor)
+               if(imp) imp.score = (imp.score || 0) + 10
+               res.textContent = 'No se ha votado a nadie. Resultado: victoria del impostor. (+10 pts al impostor) — Bebed, tripulantes.'
+             } else if(chosen.isImpostor){
+               // correct vote -> crew wins
+               players.forEach(p=>{
+                 if(!p.isImpostor) p.score = (p.score || 0) + 5
+               })
+               res.textContent = `Habéis votado a ${chosen.name}. Era el impostor. ¡Tripulantes ganan! (+5 pts a cada tripulante) — Bebe el impostor.`
+             } else {
+               // wrong vote -> impostor wins
+               const imp = players.find(p=>p.isImpostor)
+               if(imp) imp.score = (imp.score || 0) + 10
+               res.textContent = `Habéis votado a ${chosen.name}. No era el impostor. Era ${imp.name}. El impostor gana. (+10 pts al impostor) — Bebed, tripulantes.`
+             }
+             card.appendChild(res)
+             // show scoreboard
+             const boardTitle = document.createElement('div')
+             boardTitle.style.fontWeight = '700'
+             boardTitle.style.marginTop = '8px'
+             boardTitle.textContent = 'Tabla de puntos'
+             card.appendChild(boardTitle)
+             const table = document.createElement('div')
+             table.style.display = 'flex'
+             table.style.flexDirection = 'column'
+             table.style.gap = '6px'
+             table.style.marginTop = '8px'
+             players.forEach(p=>{
+               const row = document.createElement('div')
+               row.style.display = 'flex'
+               row.style.justifyContent = 'space-between'
+               row.style.padding = '8px'
+               row.style.borderRadius = '8px'
+               row.style.background = 'rgba(255,255,255,0.02)'
+               const left = document.createElement('div')
+               left.textContent = p.name + (p.isImpostor ? ' (Impostor)' : '')
+               const right = document.createElement('div')
+               right.textContent = (p.score || 0) + ' pts'
+               row.appendChild(left)
+               row.appendChild(right)
+               table.appendChild(row)
+             })
+             card.appendChild(table)
+             // Next round button (preserve players & scores, start a new round immediately)
+             const nextRound = document.createElement('button')
+             nextRound.textContent = 'Siguiente ronda'
+             nextRound.style.marginTop = '12px'
+             nextRound.style.padding = '10px'
+             nextRound.style.border = '0'
+             nextRound.style.borderRadius = '10px'
+             nextRound.style.background = 'var(--accent)'
+             nextRound.style.color = '#fff'
+             nextRound.addEventListener('click', ()=>{
+               // remove overlay and immediately trigger a new round using the same start flow
+               document.body.removeChild(overlay)
+               document.getElementById('nameInput').disabled = false
+               addBtn.disabled = false
+               startBtn.disabled = false
+               renderList()
+               // small timeout to allow UI to re-enable then start a new round
+               setTimeout(()=> startBtn.click(), 160)
+             })
+             card.appendChild(nextRound)
+
+             // End game button - closes overlay and leaves current scores
+             const endGameBtn = document.createElement('button')
+             endGameBtn.textContent = 'Acabar juego'
+             endGameBtn.style.marginTop = '12px'
+             endGameBtn.style.marginLeft = '10px'
+             endGameBtn.style.padding = '10px'
+             endGameBtn.style.border = '0'
+             endGameBtn.style.borderRadius = '10px'
+             endGameBtn.style.background = 'rgba(255,255,255,0.04)'
+             endGameBtn.style.color = '#fff'
+             endGameBtn.addEventListener('click', ()=>{
+               document.body.removeChild(overlay)
+               document.getElementById('nameInput').disabled = false
+               addBtn.disabled = false
+               startBtn.disabled = false
+               renderList()
+             })
+             card.appendChild(endGameBtn)
+           })
+           card.appendChild(voteBtn)
+         }
+       })
+
+       // Settings toggle behaviour
+       const settingsBtn = document.getElementById('settingsBtn')
+       const settingsPanel = document.getElementById('settingsPanel')
+       const closeSettings = document.getElementById('closeSettings')
+
+       function openSettings(){
+         settingsPanel.classList.remove('hidden')
+         settingsBtn.setAttribute('aria-expanded','true')
+       }
+       function closeSettingsFn(){
+         settingsPanel.classList.add('hidden')
+         settingsBtn.setAttribute('aria-expanded','false')
+       }
+
+       settingsBtn.addEventListener('click', ()=>{
+         if(settingsPanel.classList.contains('hidden')) openSettings()
+         else closeSettingsFn()
+       })
+       closeSettings.addEventListener('click', closeSettingsFn)
+
+       // impostor selector controls
+       const impMinus = document.getElementById('impMinus')
+       const impPlus = document.getElementById('impPlus')
+       const impDisplay = document.getElementById('impostorCountDisplay')
+       const impHidden = document.getElementById('impostorCount')
+       function setImpostorCount(v){
+         const max = parseInt(impHidden.max || (players.length - 1) || 1,10) || 1
+         const val = Math.max(1, Math.min(v, max))
+         impHidden.value = val
+         if(impDisplay) impDisplay.textContent = val
+       }
+       if(impMinus) impMinus.addEventListener('click', ()=> { setImpostorCount((parseInt(impHidden.value,10)||1)-1) })
+       if(impPlus) impPlus.addEventListener('click', ()=> { setImpostorCount((parseInt(impHidden.value,10)||1)+1) })
+       // keyboard accessibility: allow arrow keys when focus inside panel
+       document.getElementById('settingsPanel').addEventListener('keydown',(e)=>{
+         if(e.key === 'ArrowLeft') impMinus && impMinus.click()
+         if(e.key === 'ArrowRight') impPlus && impPlus.click()
+       })
+
+       // initial render
+       renderList()
+     })()
+  </script>
+</body>
+</html>
+
